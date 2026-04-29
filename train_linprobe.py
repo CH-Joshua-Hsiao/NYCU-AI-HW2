@@ -85,10 +85,14 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--pretrained", type=str, default="simclr_baseline.pth")
+    parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--random", action="store_true")
+    parser.add_argument("--save_name", type=str, default=None)
     args = parser.parse_args()
     
     if args.random:
-        train_linprobe(is_random_baseline=True, save_name="linprobe_random_baseline.pth")
+        save_name = args.save_name if args.save_name else "linprobe_random_baseline.pth"
+        train_linprobe(is_random_baseline=True, save_name=save_name, epochs=args.epochs)
     else:
-        train_linprobe(pretrained_path=args.pretrained, save_name="linprobe_simclr.pth")
+        save_name = args.save_name if args.save_name else "linprobe_simclr.pth"
+        train_linprobe(pretrained_path=args.pretrained, save_name=save_name, epochs=args.epochs)
