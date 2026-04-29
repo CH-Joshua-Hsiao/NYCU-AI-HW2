@@ -1,0 +1,124 @@
+Artificial Intelligence   NYCU Spr2026  Project #2   Due 5/3/2026 
+ 
+The objective for this project is for you to experiment with building and evaluation a foundation model for 
+representation learning using a self-supervised learning (SSL) approach. To allow for sufficient time for your 
+experiments, we will start with a simple backbone model (resnet-18) and a dataset of small images (CIFAR-
+10 with 32x32 images). Once you have this baseline model working, you can then try with variations. 
+Basics of the SimCLR method using contrastive learning: 
+ As mentioned in the class, the figure shown above illustrates the basic concept of SimCLR. We focus on 
+the first version of SimCLR; the original paper is available at https://arxiv.org/abs/2002.05709. 
+ The network in SimCLR training include the backbone (in our case, a modified resnet-18, excluding the 
+fully connected layer at the end) and a projector head (a two-layer multi-layer perceptron in the original 
+paper). 
+ For a batch size of N source images, two independent augmentations are generated, so the effective batch 
+size is 2N. Multiple transforms are used, commonly including  random crop, horizontal flip, color jitter, 
+and random grayscale. A normalization step at the end is required. 
+ The loss function to be used is called NT-Xent loss in the original paper. The idea is explained below: 
+ Consider an image x in the batch (after augmentation). There are 2N–1 other images in the batch. The 
+task is to identify the mate (the other image in the batch from the same source) of x. 
+ For all the images in a batch, normalize their output vectors (after the projector head) and then compute 
+their pairwise cosine similarity. For each x, you get 2N–1 similarities with the other images. 
+ Divide the similarities with a "temperature" parameter, then compute their softmax values. The loss 
+for x is the negative log of the softmax value of the mate. (This is equivalent to cross-entropy loss if 
+we treat "finding the mate of x" as a classification problem.) 
+ The loss for a batch is the average loss for all the images in the batch. 
+ Once the SSL training is finished, we discard the projector head. T he "representation" we want is the 
+output of the backbone (for resnet-18, that is after the final global-average-pooling and flatten layers). 
+ For SimCLR, the batch size affects the training more than in regular supervised learning. A larger batch 
+size provides more variety of negative samples, allowing more effective learning. 
+More notes about SSL training and evaluation: 
+ The standard evaluation is to attach a linear (fully connected) layer after the encoder (backbone) output 
+to do a classification task. This method is called linear probing: You freeze the weights of the encoder  
+and train only the final linear layer for the classification problem. This provides an indication of the quality 
+of the representation learned. 
+ The loss curve during t raining, while decreasing over time, is not a go od indicator of SSL learning 
+performance. This is because the loss is not the same as the objective. One common approach to observe 
+the actual quality of the learned representation during t raining is kNN monitor: Do k-nearest-neighbor 
+classification of the test set using current representations of the training set. (You use the encoder outputs, 
+not the projector outputs, for this purpose.) You should see that the kNN accuracy grows during training. 
+Practical notes about implementation: 
+ Note: There should be ample open-source samples of SimCLR that you can reference. You can also use 
+AI to guide you through the implementation. Just make sure to mention them in your report. 
+ All the models are to be trained from scratch (NO pretrained weights). 
+ To use resnet-18 for CIFAR-10, you need to make change to the first convolution layer to avoid too much 
+downsampling in the beginning. The standard practice: 
+ Change its kernel size to 3x3 (7x7 in original resnet) with stride=1 and padding=1.  
+ Change the max-pooling layer after the first convolution layer to an identity layer. 
+ Some settings and hyperparameters to start with (you can modify them in your experiments):  
+ Adam optimizer 
+ Learning rate: 3e-4 
+ Weight decay: 1e-6 
+ Temperature: 0.5 
+ Projector head: 512 inputs (from backbone)  512 hidden nodes  128 outputs 
+ Training time: 200 epochs. 
+ k=20 (for knn monitor) 
+ Do knn monitor for every 5 epochs (this takes some time as well) 
+ Linear probing: (fixed) Adam optimizer, 1e-3 learning rate, 1e-6 weight decay, same batch size as SSL 
+training, 100 epochs, full training set used. 
+ Allowed batch size depends on the VRAM available; you can try 64 for low -end graphics cards, 128 or 
+256 for mid-range ones, 512 or 1024 for better ones. 
+Experiments and Analysis: 
+ Note: The top two points are required. The rest in the list are optional ones that you can explore. 
+ (Required) Start with the baseline model and report the learning curves (loss and knn-monitor accuracy) 
+during training, as well as the final linear probing results. 
+ (Required) Train a model with supervised learning (SL) from scratch. You use the same backbone without 
+the projector, and attach a classification head (512 to 10) to the  backbone. Compare the accuracy on test 
+set with that of the SSL model (i.e., the linear probing results). How are they different? 
+ A real lower -bound basel ine: Randomly initialize and freeze the weights of the backbone  (i.e., the 
+backbone is never trained), and then do linear probing. Compare with the SSL and SL models above. 
+ For ablation study, the following are more critical for SSL: 
+ The types and strengths of augmentation. 
+ The choice of temperature. What happens to the learning curves (loss and knn -monitor accuracy) if 
+you use a high temperature (such as 5) or a low temperature (such as 0.1)? Are the changes of the two 
+learning curves consistent? 
+ The batch size. From the la rgest batch size that you can train your model successfully (such as 512), 
+re-do the training with progressively smaller batch sizes  (such as 256, 128, 64, 32), and observe the 
+differences in the learning curves. 
+ You can also try to use no projector head an d compute the los s directly using the encoder (backbone) 
+outputs (dim = 512) during training. See what happens with the eventual performance. 
+ You can also try to use the projector head outputs as the representations (dim = 128) during evaluation. 
+See what happens with the eventual performance. 
+ A very important property of a foundation model is how well the representation work with new datasets: 
+ To do: Freeze the backbone, and do linear probing on a different dataset. 
+ Compare the results using the SSL, SL, and baseline models.  
+ Options of "other" datasets include CIFAR-100, STL-10, Flowers-102, Food-101, and even the one 
+you created in the first project. 
+ Remember to resize (to 32x32) and normalize the input images for this part of experiments. 
+ For meaningful comparison, the settings for linear probing have to be the same for all experiments , 
+including those involving other datasets. 
+Discussion: 
+ Important: Don't just let AI create the discussion for you. Put your thoughts into all the observations and 
+see whether you do or don't understand them. 
+ Based on your experiments, are the results and observed behaviors what you expect? 
+ Discuss factors that affect the results, including dataset characteristics. 
+ Describe experiments that you would do if there were more time available. 
+ Indicate what you have learned from the experiments as well as your remaining questions. 
+Submission: 
+ A report in PDF format (maximum 10 pages single-spaced). It should contain the following sections: 
+ A brief statement of you research question and motivation in plain text. 
+ Description of the methods used. Provide references for public libraries, open-source codes, and/or AI 
+tools used.  
+ Description of your experiments, include evaluation results and examples. 
+ A "discussion" section as described above. 
+ List of references. 
+ Include your program code as an appendix (not counting toward the 10-page limit), starting from a 
+separate page. The code listing should be well-organized and contain comments that help the readers 
+understand your code. 
+ Additional notes about the report: 
+ Submit your report through E3. Late submissions are accepted for up to 5 days, with a deduction of 
+10% per day. 
+ Make sure your student ID is within the filename as well as on the first page. 
+ For the description of methods: You should expect the reader to read this part of your report without the 
+code listing. Do NOT write your report like a documentation of your program. 
+ Experimental results should come with sufficient description/summarization and discussions. When 
+you list your results, always ask yourself this question: "What message do I want my reader to learn 
+from these numbers?" And then put your answer to text. 
+ Presentation of results: Use tables formatted in you report, NOT screenshots. Use charts or plots when 
+appropriate. 
+ Legibility is VERY important. Use at least size-12 fonts for your main text and at least size-10 fonts in 
+tables and figures. DO NOT try to cram lots of material into the 10-page limit by using smaller fonts 
+and/or small plots, which will actually hurt your grade. 
+ 
+ 
+ 
+  
