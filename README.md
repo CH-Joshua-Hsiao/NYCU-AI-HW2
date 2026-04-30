@@ -2,7 +2,8 @@
 
 **Author**: 蕭至恆 (Chih-Heng Hsiao)  
 **Student ID**: 413551034  
-**Course**: Artificial Intelligence (NYCU)
+**Course**: Artificial Intelligence (NYCU)  
+**GitHub Repository**: [CH-Joshua-Hsiao/NYCU-AI-HW2](https://github.com/CH-Joshua-Hsiao/NYCU-AI-HW2)
 
 ## 📌 Project Overview
 This repository contains the implementation of **SimCLR** (Simple Framework for Contrastive Learning of Visual Representations). The project explores the capacity of Self-Supervised Learning (SSL) to extract highly discriminative, general-purpose visual features from the CIFAR-10 dataset without the necessity of human-annotated labels. 
