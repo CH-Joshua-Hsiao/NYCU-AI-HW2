@@ -12,7 +12,7 @@ from models import SimCLRNet
 from loss import NTXentLoss
 from utils import knn_monitor
 
-def train_simclr(batch_size=256, epochs=200, lr=3e-4, wd=1e-6, temperature=0.5, save_name="simclr_model.pth"):
+def train_simclr(batch_size=256, epochs=200, lr=3e-4, wd=1e-6, temperature=0.5, save_name="simclr_model.pth", no_projector=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     simclr_transform, _, test_transform = get_cifar10_transforms()
@@ -40,10 +40,13 @@ def train_simclr(batch_size=256, epochs=200, lr=3e-4, wd=1e-6, temperature=0.5, 
             img1, img2 = img1.to(device), img2.to(device)
             
             optimizer.zero_grad()
-            _, z1 = model(img1)
-            _, z2 = model(img2)
+            h1, z1 = model(img1)
+            h2, z2 = model(img2)
             
-            loss = criterion(z1, z2)
+            if no_projector:
+                loss = criterion(h1, h2)
+            else:
+                loss = criterion(z1, z2)
             loss.backward()
             optimizer.step()
             
@@ -70,6 +73,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--temperature", type=float, default=0.5)
     parser.add_argument("--save_name", type=str, default="simclr_baseline.pth")
+    parser.add_argument("--no_projector", action="store_true")
     args = parser.parse_args()
     
-    train_simclr(batch_size=args.batch_size, epochs=args.epochs, temperature=args.temperature, save_name=args.save_name)
+    train_simclr(batch_size=args.batch_size, epochs=args.epochs, temperature=args.temperature, save_name=args.save_name, no_projector=args.no_projector)
