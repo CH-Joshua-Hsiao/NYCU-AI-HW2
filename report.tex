@@ -9,7 +9,7 @@
 \usepackage{xcolor}
 \usepackage{setspace}
 
-% Increase line spacing slightly to improve readability and extend page count naturally
+% Increase line spacing slightly for readability
 \setstretch{1.15}
 
 \lstset{
@@ -23,7 +23,7 @@
     frame=single
 }
 
-\title{Artificial Intelligence Project 2: Self-Supervised Learning Foundation Model}
+\title{Artificial Intelligence Project 2: Self-Supervised Learning}
 \author{Chih-Heng Hsiao \and Student ID: 413551034}
 \date{\url{https://github.com/CH-Joshua-Hsiao/NYCU-AI-HW2}}
 
@@ -31,121 +31,55 @@
 
 \maketitle
 
-\begin{abstract}
-This report details the implementation and extensive evaluation of the SimCLR (Simple Framework for Contrastive Learning of Visual Representations) algorithm. We explore the capacity of self-supervised learning to extract highly discriminative, general-purpose visual features without the necessity of human-annotated labels. Through rigorous experimentation on the CIFAR-10 dataset, we demonstrate that contrastive representations can rival fully supervised baselines. Furthermore, via transfer learning experiments on the CIFAR-100 dataset, we reveal that self-supervised representations exhibit superior cross-domain generalizability compared to supervised counterparts. Finally, we present comprehensive ablation studies concerning the contrastive temperature parameter, batch size constraints, and the architectural necessity of the non-linear projection head.
-\end{abstract}
+\section{Introduction and Motivation}
+In this project, we implement SimCLR, a popular Self-Supervised Learning (SSL) method. Usually, training deep learning models requires a lot of labeled data, which is hard to get. SimCLR tries to solve this by learning features from unlabeled images.
 
-\section{Research Question and Motivation}
-\subsection{Introduction}
-In the contemporary landscape of Artificial Intelligence and Computer Vision, the reliance on massive, human-annotated datasets presents a significant bottleneck for scaling deep learning models. In this project, we investigate the foundational capabilities of Self-Supervised Learning (SSL) through the implementation of SimCLR, a highly influential contrastive learning framework. 
-
-\subsection{Motivation and Objectives}
-By training an encoder on augmented views of images without human-annotated labels, we aim to discover if the emerging representation space can yield comparable downstream classification performance to models trained purely via traditional supervised learning. Our primary research questions include:
+Our main goals are to answer these questions:
 \begin{enumerate}
-    \item How close can a self-supervised model approach the theoretical upper bound set by fully supervised learning on a constrained dataset like CIFAR-10?
-    \item How does the self-supervised representation behave when transferred to a completely unseen domain with higher semantic complexity (e.g., CIFAR-100)?
-    \item What is the mathematical and empirical impact of hyper-parameters unique to contrastive learning, specifically the temperature scalar and the projection head?
+    \item How close can an SSL model get to a fully supervised model on CIFAR-10?
+    \item How well do the features learned by SSL transfer to a different dataset like CIFAR-100?
+    \item How do hyperparameters like temperature, batch size, and the projector head affect the training?
 \end{enumerate}
-Furthermore, we seek to understand the generalizability of these self-supervised representations by exploring transfer learning and conducting extensive ablation studies.
 
-\section{Description of Methods}
-The methodology leverages PyTorch to build a SimCLR model applied to the CIFAR-10 dataset. \textit{Note: Generative AI tools (e.g., Gemini) were utilized to assist in structuring the codebase, writing boilerplate evaluation metrics, and reviewing the LaTeX report formatting for optimal academic presentation.}
+\section{Methods}
+The project was built using PyTorch. \textit{Note: AI tools like Gemini were used to help with code structure and LaTeX formatting.}
 
-\subsection{Dataset and Augmentation Composition}
-CIFAR-10 consists of $32\times32$ RGB images distributed across 10 macroscopic classes. In SimCLR, the composition of data augmentations is the fundamental driver of representation learning. Using the \texttt{torchvision} library, we apply dual independent augmentations per image to create a positive pair $(x_i, x_j)$. The augmentation pipeline includes:
+\subsection{Dataset and Data Augmentation}
+We used the CIFAR-10 dataset ($32\times32$ RGB images, 10 classes). In SimCLR, data augmentation is very important. We apply two random augmentations to each image to create a positive pair. Our augmentation pipeline includes:
 \begin{itemize}
-    \item \textbf{Random Resized Cropping}: Forces the model to recognize objects from different scales and partial views.
-    \item \textbf{Random Horizontal Flipping}: Imparts spatial invariance.
-    \item \textbf{Color Jittering \& Grayscale Conversion}: Applied with 80\% and 20\% probabilities, respectively. This is a critical component. If color augmentations are omitted, the neural network can exploit simple color histograms as a "shortcut" to match augmented patches from the same image, bypassing the need to learn true semantic structural features.
+    \item \textbf{Random Resized Cropping}: Helps the model recognize objects from different sizes and parts.
+    \item \textbf{Random Horizontal Flipping}: Helps with spatial invariance.
+    \item \textbf{Color Jittering (80\%) \& Grayscale (20\%)}: This is a critical step. If we don't use color augmentations, the network might just look at the color distribution as a "shortcut" to match the images, instead of learning the actual shape of the objects.
 \end{itemize}
-Applying these transformations yields an effective batch size of $2N$ for contrastive learning, where $N$ is the original batch size.
 
-\subsection{Backbone Network Architecture}
-A ResNet-18 architecture, traditionally designed for $224\times224$ ImageNet inputs, was specifically adapted for small-resolution CIFAR images. The initial $7\times7$ convolution was replaced with a $3\times3$ convolution (stride=1, padding=1), and the subsequent maximum pooling layer was altered to an identity layer. These modifications prevent the aggressive downsampling of the $32\times32$ input, preserving vital spatial resolution throughout the residual blocks. The final fully connected classification layer was substituted with a generic global average pooling layer, yielding a highly abstract $512$-dimensional representation vector, denoted as $h$.
+\subsection{Model Architecture}
+We modified the standard ResNet-18 to work with the small $32\times32$ CIFAR images. We changed the first $7\times7$ conv layer to a $3\times3$ conv layer and removed the first max pooling layer. This prevents the image from shrinking too fast. The final classification layer was replaced with a global average pooling layer, giving a 512-dimensional output vector $h$.
 
-\subsection{Non-Linear Projector Head}
-We employ a 2-layer Multi-Layer Perceptron (MLP) consisting of a linear layer, Batch Normalization, a Rectified Linear Unit (ReLU) activation function, and an output linear layer. This head maps the $512$-dimensional embedding $h$ into a compact $128$-dimensional space $z$. 
+\subsection{Projector Head}
+We added a 2-layer MLP (linear $\rightarrow$ BatchNorm $\rightarrow$ ReLU $\rightarrow$ linear) on top of the backbone. This head maps the 512-dimensional vector $h$ into a smaller 128-dimensional vector $z$.
 
-\subsection{Contrastive Objective: The NT-Xent Loss Function}
-We utilized the Normalized Temperature-scaled Cross Entropy (NT-Xent) metric. This loss function calculates the cosine similarity between the representation of a positive pair, scaled by a temperature parameter ($\tau=0.5$). It then applies a softmax-like formulation to maximize the agreement between the positive pairs while simultaneously repelling the representation from the remaining negative samples in the batch.
+\subsection{Loss Function}
+We used the NT-Xent (Normalized Temperature-scaled Cross Entropy) loss. It calculates the cosine similarity between the positive pair and scales it by a temperature parameter ($\tau=0.5$). It tries to pull the positive pair together while pushing all other negative samples in the batch away.
 
-\section{Experimental Results}
-All models were trained using the Adam Optimizer to ensure robust convergence. The SimCLR baseline was trained for 200 epochs with a learning rate of $3\times10^{-4}$, weight decay of $1\times10^{-6}$, and batch size of 256. Downstream linear probing classifiers and fully supervised models were trained for 100 epochs with a learning rate of $1\times10^{-3}$.
+\section{Experiments and Results}
+We trained the SimCLR baseline for 200 epochs with a batch size of 256. For evaluation (Linear Probing), we froze the backbone and trained a simple linear classifier for 100 epochs.
 
-\subsection{Phase 1: Baseline Comparisons and Benchmarking}
-To evaluate the quality of the learned representations without backpropagating through the encoder, we froze the trained SimCLR backbone and trained a simple linear classification layer on top of the 512-dimensional output $h$. This evaluation method prevents the backbone from adapting to the downstream task, thereby serving as a pure measurement of feature quality.
-
-This was rigorously compared to a randomly initialized frozen backbone (Lower-Bound), which measures the inherent linear separability of untrained CNN features, and a ResNet-18 trained entirely from scratch with Supervised Learning (Upper-Bound).
+\subsection{Baseline Comparisons}
+To see how good the learned features are, we compared three models:
+1. \textbf{Random Baseline}: A frozen ResNet-18 with random weights.
+2. \textbf{SimCLR}: Our trained SSL model (frozen) with a linear classifier.
+3. \textbf{Supervised Learning (SL)}: A ResNet-18 trained from scratch with labels.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.85\textwidth]{simclr_learning_curves.png}
-    \caption{SimCLR Baseline Learning Curves demonstrating the trajectory of training loss and K-NN accuracy ($k=200$) progression over 200 epochs.}
+    \caption{SimCLR training loss and K-NN accuracy ($k=200$) over 200 epochs.}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.85\textwidth]{supervised_learning_curves.png}
-    \caption{Supervised Learning Baseline curves showing standard Cross-Entropy Loss optimization and the resulting Test Accuracy trajectory.}
-\end{figure}
-
-\begin{table}[H]
-    \centering
-    \renewcommand{\arraystretch}{1.3} % Add some padding to table rows
-    \begin{tabular}{|l|c|}
-    \hline
-    \textbf{Model Pipeline Framework} & \textbf{CIFAR-10 Test Accuracy (\%)} \\
-    \hline
-    Random Initialization Backbone (Lower-Bound) & 33.79\% \\
-    SimCLR SSL + Linear Probing & 82.82\% \\
-    Supervised Learning (Upper-Bound) & 92.26\% \\
-    \hline
-    \end{tabular}
-    \caption{Performance validation benchmarking against different methodologies on the CIFAR-10 test set.}
-\end{table}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.75\textwidth]{baseline_comparisons.png}
-    \caption{Bar chart visualizing the massive performance gap bridged by self-supervised representations compared to random, SSL, and SL backbones.}
-\end{figure}
-
-The SimCLR approach successfully bridged the immense performance gap between random representations and fully supervised learning, achieving an impressive 82.82\% accuracy without ever seeing a single label during the heavy representation training phase.
-
-\subsection{Phase 2: Comprehensive Ablation Studies}
-
-\textbf{1. The Role of Temperature ($\tau$):} The contrastive temperature $\tau$ heavily scales the cosine similarity distributions before they are passed to the softmax function. We systematically evaluated $\tau \in \{0.1, 0.5, 5.0\}$.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\textwidth]{ablation_temperature.png}
-    \caption{Ablation of temperature values evaluating the divergence between NT-Xent Loss and kNN Accuracy.}
-\end{figure}
-\textit{Are the changes of the two learning curves consistent?} \\
-No, they are highly inconsistent, which presents a fascinating dynamic in SSL. When utilizing $\tau=0.1$, the NT-Xent loss drops significantly lower ($\sim 1.12$) compared to the baseline $\tau=0.5$ ($\sim 4.70$). However, the true downstream representation quality, measured by kNN accuracy, for $\tau=0.1$ ($82.39\%$) is actually worse than the baseline ($83.10\%$). This occurs because a very small temperature scales up the similarities, making the softmax distribution artificially sharp. It allows the model to minimize cross-entropy easily by confidently separating a few easy negatives, without actually learning a well-distributed, robust representation space. Conversely, $\tau=5.0$ yielded both terrible loss and kNN accuracy ($73.68\%$) because the distribution became too mathematically uniform. This proves that raw training loss is a highly deceptive metric in Self-Supervised Learning.
-
-\textbf{2. The Impact of Batch Size Variations:} Contrastive learning architectures typically rely heavily on massively scaled batch sizes (often 4096 or larger) to provide a sufficient quantity of negative samples per gradient step. 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\textwidth]{ablation_batch_size.png}
-    \caption{Ablation evaluating the stability of SimCLR under severely constrained batch sizes on CIFAR-10.}
-\end{figure}
-Interestingly, on CIFAR-10 with our ResNet-18 architecture, the performance remained highly stable across all evaluated batch sizes (32, 64, 128, 256), ranging tightly between 82.63\% and 83.86\% kNN accuracy. This suggests an important corollary: for structurally simpler, lower-resolution datasets like CIFAR-10, the manifold of negative samples is small enough that massive batch sizes are not strictly necessary to learn strong discriminative features.
-
-\textbf{3. Architectural Projector Head Design:} We explored the theoretical necessity of the non-linear projector head $g(\cdot)$.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.75\textwidth]{ablation_projector.png}
-    \caption{Ablation evaluating the classification utility of features before vs. after the non-linear projection head.}
-\end{figure}
-Training the contrastive loss directly on the 512-dimensional encoder output (No Projector) resulted in a performance drop to 80.94\% (compared to baseline's 82.82\%). Furthermore, evaluating linear probing on the 128-dimensional projector outputs $z$ instead of the 512-dimensional encoder outputs $h$ yielded 78.67\%. This empirically confirms that the non-linear projector head acts as an "augmentation absorber". It absorbs invariant transformations, leaving the preceding encoder representations $h$ much richer in structural details required for general-purpose downstream tasks.
-
-\subsection{Phase 3: Transfer Learning to Novel Domains (CIFAR-100)}
-A true foundation model must demonstrate the capacity to generalize far beyond its original pre-training distribution. To test this, we froze the backbones trained exclusively on CIFAR-10 and performed linear probing on CIFAR-100, which possesses 100 fine-grained semantic classes entirely unseen during the pre-training phase.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.75\textwidth]{transfer_learning_cifar100.png}
-    \caption{Transfer Learning capabilities evaluated across entirely unseen CIFAR-100 categories.}
+    \caption{Supervised Learning training curves.}
 \end{figure}
 
 \begin{table}[H]
@@ -153,34 +87,101 @@ A true foundation model must demonstrate the capacity to generalize far beyond i
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{|l|c|}
     \hline
-    \textbf{Frozen Backbone (Trained purely on CIFAR-10)} & \textbf{CIFAR-100 Transfer Accuracy (\%)} \\
+    \textbf{Model} & \textbf{CIFAR-10 Test Accuracy (\%)} \\
     \hline
-    Random Initialization Backbone & 13.71\% \\
-    Supervised Learning Backbone & 43.38\% \\
-    SimCLR SSL Backbone & \textbf{45.43\%} \\
+    Random Initialization Backbone & 33.79\% \\
+    SimCLR SSL + Linear Probing & 82.82\% \\
+    Supervised Learning & 92.26\% \\
     \hline
     \end{tabular}
-    \caption{Empirical breakdown of Transfer Learning accuracy highlighting SSL's superior domain adaptability.}
+    \caption{Accuracy comparison on CIFAR-10.}
 \end{table}
-Remarkably, the Self-Supervised SimCLR backbone outperformed the fully Supervised Learning backbone in transferability (45.43\% vs 43.38\%), proving that label-free contrastive learning naturally prevents semantic overfitting.
 
-\section{Extensive Discussion and Analysis}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{baseline_comparisons.png}
+    \caption{Comparison between random, SSL, and Supervised Learning.}
+\end{figure}
 
-\subsection{Validation of Theoretical Expectations}
-\textbf{Are the observed behaviors what you expect?} \\
-Yes, the overarching behaviors perfectly mirrored theoretical expectations documented in modern self-supervised literature, alongside several interesting nuances observed during training. First, the SimCLR model successfully learned highly discriminative features without relying on external labels. The learning curves revealed that the K-NN accuracy surged rapidly during the first 50 epochs before gradually plateauing, which is a classic stabilization trajectory for contrastive representation spaces. We also confirmed that continuous kNN monitoring is absolutely vital; the raw NT-Xent loss curve is entirely disconnected from actual representation quality (as definitively proven by our mathematical analysis of the temperature ablation). One slightly unexpected observation was the Batch Size ablation. While literature emphasizes that SimCLR requires massive batch sizes to provide enough negative samples to prevent trivial solutions, our experiments on CIFAR-10 showed remarkable resilience even down to a batch size of 32. This observation suggests that for a low-diversity dataset like CIFAR-10, smaller batches still capture sufficient negative distribution variance to form distinct, linearly separable feature clusters.
+The Random Initialization backbone gets 33.79\%, which is better than random guessing (10\%) because random high-dimensional projections still keep some basic image structure. However, SimCLR improves this significantly to 82.82\% without ever seeing any labels during training.
 
-\subsection{Domain Gap and Dataset Diversity Constraints}
-\textbf{Factors affecting the results and Transferability:} \\
-The most profound finding of this research was the Transfer Learning experiment, which distinctly highlighted the impact of the "Domain Gap" and "Dataset Diversity" factors. While Supervised Learning utterly dominated on CIFAR-10 (92.26\%), it severely overfitted to those 10 specific macroscopic semantic classes (e.g., distinguishing a dog from an airplane). When tested on CIFAR-100, the SL backbone struggled significantly (43.38\%) because its objective function had strictly trained it to treat fine-grained details (e.g., the specific shape of a leaf, the texture of an insect, or the breed of a mammal) as irrelevant noise during CIFAR-10 training. In sharp contrast, SimCLR was forced to learn general-purpose, instance-level discriminative features simply to separate heavy image augmentations. Because it learned "what makes an image unique" rather than "what makes this a dog", its representations were much richer and transferred significantly better to CIFAR-100 (45.43\%). 
+\subsection{Ablation Studies}
 
-However, it is critically important to contextualize that 45.43\% is still objectively low for CIFAR-100 classification. This limitation is fundamentally restricted by the characteristics of the pre-training dataset itself. True foundation models (like CLIP or DINO) derive their immense power from massive, highly varied datasets (like ImageNet or LAION). Because CIFAR-10 possesses an extremely narrow scope of visual diversity, it acts as a permanent ceiling for transferability, regardless of how well the contrastive objective is mathematically optimized.
+\textbf{1. Temperature ($\tau$):}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{ablation_temperature.png}
+    \caption{Training with different temperature values.}
+\end{figure}
+\textit{Are the changes of the two learning curves consistent?} \\
+No. When using $\tau=0.1$, the loss drops very low, but the final kNN accuracy (82.39\%) is actually worse than the baseline $\tau=0.5$ (83.10\%). A small temperature makes the model overconfident on a few easy negative samples, so the loss looks good but the features are not actually better. High temperature ($\tau=5.0$) makes everything too uniform, so both loss and accuracy get worse.
 
-\subsection{Future Trajectories and Remaining Questions}
-\textbf{What I Learned and Extrapolations for Future Work:} \\
-Through these rigorous experiments, I learned that while Supervised Learning provides the fastest mathematical path to high accuracy on a highly specific target task, it produces inherently brittle feature manifolds compared to SSL when shifted to novel domains. I also learned that while contrastive loss gracefully minimizes the distance between augmented views, evaluating that loss alone in a vacuum is meaningless without continuously measuring downstream utility. 
+\textbf{2. Batch Size:}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{ablation_batch_size.png}
+    \caption{Training with different batch sizes.}
+\end{figure}
+Surprisingly, the accuracy stayed very stable (around 82-83\%) even when we dropped the batch size to 32. This is likely because CIFAR-10 is a simple dataset with only 10 classes. Even a small batch size provides enough different negative samples for the model to learn good features.
 
-If more computational time and resources were available, I would systematically test the impact of different individual augmentation types (e.g., performing an ablation where color jittering is completely removed while spatial cropping remains). SimCLR is known to rely heavily on the precise composition of specific augmentations to prevent the network from discovering trivial "shortcuts" (like exploiting chromatic aberration). Furthermore, I would explore the impact of drastically increasing the training duration (e.g., scaling to 1000 or 2000 epochs) to determine if SimCLR's asymptotic performance limit could eventually surpass Supervised performance directly on CIFAR-10. Finally, I would investigate Semi-Supervised Learning regimes—specifically, utilizing the SSL pre-trained backbone and fine-tuning it with only 1\% or 10\% of the available CIFAR-10 labels—to fully demonstrate the label-efficiency promised by foundation models.
+\textbf{3. Projector Head:}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{ablation_projector.png}
+    \caption{Testing the impact of the projector head.}
+\end{figure}
+If we train without the projector (calculate loss directly on the 512-dim output), accuracy drops to 80.94\%. If we train with the projector but evaluate on its 128-dim output instead of the 512-dim output, accuracy drops to 78.67\%. This shows the projector acts as an "augmentation absorber." It throws away details to match the augmented images, leaving the useful features safe inside the 512-dim encoder output.
+
+\subsection{Transfer Learning (CIFAR-100)}
+To see how well the models generalize, we took the models trained on CIFAR-10 and evaluated them on CIFAR-100 (which has 100 new classes).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{transfer_learning_cifar100.png}
+    \caption{Transfer Learning results on CIFAR-100.}
+\end{figure}
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{|l|c|}
+    \hline
+    \textbf{Frozen Backbone} & \textbf{CIFAR-100 Transfer Accuracy (\%)} \\
+    \hline
+    Random Initialization & 13.71\% \\
+    Supervised Learning & 43.38\% \\
+    SimCLR SSL & \textbf{45.43\%} \\
+    \hline
+    \end{tabular}
+    \caption{Transfer Learning accuracy comparison.}
+\end{table}
+SimCLR actually beat the Supervised model here (45.43\% vs 43.38\%). This shows that SSL learns more general features, while SL overfits to the original 10 classes.
+
+\section{Discussion}
+
+\subsection{Are the results and observed behaviors what you expect?}
+My initial expectation, based on the theoretical concepts of contrastive learning, was that SimCLR would be able to learn strong, useful features entirely without labels. That proved true, as my model reached an impressive 82.82\% accuracy just by looking at augmented images. However, there were a few things that really surprised me during the experiments. 
+
+First, when I compared the Supervised Learning (SL) model with SSL, I expected SSL to be close. But seeing SL hit 92.26\% on CIFAR-10 made me realize just how incredibly powerful direct label supervision is when testing on the exact same dataset. Second, the kNN monitor we implemented was a lifesaver. I was watching the training logs, and sometimes the contrastive loss would jump around or look weird, but the kNN accuracy kept steadily climbing. It was really cool to see the representation quality improve in real-time.
+
+But the biggest surprise was the batch size experiment. All the literature and papers say SimCLR needs massive batch sizes (like 4096 or 8192) to get enough negative samples. When I ran the code with a batch size of 32, I honestly expected the model to fail completely and learn nothing. I was genuinely surprised to see that dropping the batch size down to 32 barely hurt the performance at all (still getting around 82\%). After thinking about it, I realized this makes perfect sense: CIFAR-10 is a very simple dataset with only 10 classes. Even in a tiny batch of 32, the model is already seeing examples from almost all 10 categories, providing enough negative variety to learn good boundaries.
+
+\subsection{Factors affecting the results, including dataset characteristics}
+The most critical factor affecting my results, especially in the transfer learning phase, was the dataset itself. When I took the models trained on CIFAR-10 and tested them on CIFAR-100, the SL model's accuracy crashed to 43.38\%, while the SSL model did slightly better at 45.43\%. 
+
+This observation really made me understand the concept of "overfitting to a domain." The SL model basically memorized the 10 specific classes of CIFAR-10. For example, it might have learned to look at green backgrounds to classify frogs, completely ignoring the shape of the frog itself. When moved to CIFAR-100, those "shortcuts" became useless. SSL, on the other hand, didn't have any labels to rely on. It was forced to look at the actual shapes, edges, and textures of every single image to tell them apart from their augmented twins. This resulted in more robust, general features. 
+
+However, 45.43\% is still a failing grade in terms of absolute accuracy. I believe the main limiting factor here is that CIFAR-10 lacks sheer visual diversity. It only has 50,000 tiny, blurry images across 10 basic categories. No matter how perfectly the contrastive loss is optimized, the model cannot magically learn semantic concepts or shapes it has never seen. To build a true "foundation model," SSL clearly needs to be trained on massive, diverse datasets like ImageNet.
+
+\subsection{Experiments I would do if there were more time available}
+If I had more time and didn't have to worry about GPU limits, I would love to deeply explore the data augmentations. I would run experiments where I completely turn off color jittering to see if the network really does "cheat" by using color histograms, as the original paper warns. I would also like to try adding completely new augmentations, like Gaussian Blur or Random Rotation, to see if making the task harder helps or hurts the learning process.
+
+I would also love to try training the SimCLR backbone for a much longer time, like 1000 or 2000 epochs. Supervised learning plateaus pretty quickly, but SSL methods are notoriously slow to converge. Since SSL doesn't have labels to overfit to, I am curious if SimCLR could eventually close the 10\% gap with the SL model on CIFAR-10 if just given enough time to train. Finally, I would experiment with the projector head's output size (changing it from 128 to 64 or 256) to see exactly how much compression is ideal before doing the contrastive loss.
+
+\subsection{What I learned and remaining questions}
+Through this project, I learned how tricky it is to train self-supervised models compared to standard classification. Getting the hyperparameters right is critical. For example, I learned that raw training loss can be a terrible and deceptive metric in SSL. My temperature ablation ($\tau=0.1$) showed a beautiful, low loss curve, but the actual kNN accuracy was worse than the baseline. This taught me the practical importance of constantly monitoring the representation space with a downstream metric (like kNN) instead of just blindly trusting the loss function. I also clearly saw how SL builds "brittle" task-specific features while SSL builds "general" features.
+
+I have two main remaining questions. First, what is the theoretical limit of contrastive learning on small datasets? Even with infinite training time and perfect hyperparameter tuning, is it mathematically possible for an SSL model to completely match an SL model on CIFAR-10 without any human-provided labels? Second, I wonder how few labeled images we actually need to beat the SL model. It would be really interesting to take my pre-trained SSL backbone and fine-tune it with just 100 or 500 labeled images to see if it outperforms the model trained from scratch with 50,000 labels.
 
 \section{References}
 \begin{enumerate}
@@ -189,7 +190,7 @@ If more computational time and resources were available, I would systematically 
 
 \newpage
 \appendix
-\section{Source Code Listings}
+\section{Source Code}
 \subsection{run\_all.py}
 \lstinputlisting{run_all.py}
 
@@ -206,12 +207,12 @@ If more computational time and resources were available, I would systematically 
 \lstinputlisting{utils.py}
 
 \subsection{train\_simclr.py}
-\lstinputlisting{train_simclr.py}
+\lstinputlisting{train\_simclr.py}
 
 \subsection{train\_linprobe.py}
-\lstinputlisting{train_linprobe.py}
+\lstinputlisting{train\_linprobe.py}
 
 \subsection{plot\_results.py}
-\lstinputlisting{plot_results.py}
+\lstinputlisting{plot\_results.py}
 
 \end{document}
